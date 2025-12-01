@@ -1,0 +1,28 @@
+{
+  "liveServer.settings.port": 3000,
+  "liveServer.settings.root": "/",
+  "liveServer.settings.CustomBrowser": "chrome",
+  "liveServer.settings.AdvanceCustomBrowserCmdLine": "",
+  "liveServer.settings.NoBrowser": false,
+  "liveServer.settings.IgnoreFiles": [
+    ".vscode/**",
+    "**/*.scss",
+    "**/*.sass",
+    "**/*.ts"
+  ],
+  "liveServer.settings.donotShowInfoMsg": false,
+  "liveServer.settings.donotVerifyTags": false,
+  "liveServer.settings.proxy": {
+    "enable": false,
+    "baseUri": "/",
+    "proxyUri": "http://127.0.0.1:80"
+  },
+  "liveServer.settings.mount": [
+    ["/", "./"]
+  ],
+  "liveServer.settings.file": "index.html",
+  "liveServer.settings.wait": 100,
+  "liveServer.settings.fullReload": false,
+  "liveServer.settings.useBrowserPreview": false,
+  "liveServer.settings.useWebExt": false
+}
