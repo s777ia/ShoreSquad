@@ -480,8 +480,162 @@ h6 {
   padding: var(--space-2xl);
   border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-lg);
-  max-width: 600px;
+  max-width: 100%;
   margin: 0 auto;
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.weather__current {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-xl);
+  align-items: center;
+  text-align: left;
+}
+
+.weather__main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  text-align: center;
+}
+
+.weather__icon {
+  font-size: 4rem;
+  margin-bottom: var(--space-sm);
+}
+
+.weather__temp {
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-bold);
+  margin: 0;
+  line-height: 1;
+}
+
+.weather__location {
+  font-size: var(--font-size-sm);
+  opacity: 0.9;
+  margin-top: var(--space-xs);
+}
+
+.weather__condition {
+  font-size: var(--font-size-lg);
+  opacity: 0.95;
+  margin-bottom: var(--space-md);
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
+.weather__details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+  grid-column: 1 / -1;
+}
+
+.weather__detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(10px);
+}
+
+.weather__label {
+  font-size: var(--font-size-sm);
+  opacity: 0.9;
+  font-weight: var(--font-weight-medium);
+}
+
+.weather__value {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* 4-Day Forecast Styles */
+.weather__forecast {
+  margin-top: var(--space-xl);
+  padding-top: var(--space-xl);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.weather__forecast-title {
+  color: var(--color-white);
+  margin-bottom: var(--space-lg);
+  font-size: var(--font-size-xl);
+  text-align: center;
+}
+
+.weather__forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-md);
+}
+
+.forecast-day {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  text-align: center;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: transform var(--transition-normal), background var(--transition-normal);
+}
+
+.forecast-day:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.forecast-day__date {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-sm);
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.forecast-day__icon {
+  font-size: 2.5rem;
+  margin: var(--space-sm) 0;
+}
+
+.forecast-day__temp {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0;
+}
+
+.temp-high {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.temp-low {
+  font-size: var(--font-size-base);
+  opacity: 0.7;
+}
+
+.forecast-day__condition {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  margin: var(--space-sm) 0;
+  opacity: 0.9;
+}
+
+.forecast-day__description {
+  font-size: var(--font-size-xs);
+  opacity: 0.8;
+  line-height: 1.4;
 }
 
 .weather__loading {
@@ -609,12 +763,35 @@ h6 {
   color: var(--color-white);
   font-size: var(--font-size-xl);
   position: relative;
-  
-  &::before {
-    content: '🗺️ Interactive Map Coming Soon';
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-semibold);
-  }
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.cleanup-map iframe {
+  border-radius: var(--radius-xl);
+}
+
+.map-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+  color: var(--color-white);
+  padding: var(--space-xl);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.next-cleanup-info h3 {
+  color: var(--color-white);
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-xl);
+}
+
+.next-cleanup-info p {
+  margin: var(--space-sm) 0;
+  opacity: 0.9;
 }
 
 /* ===== CREW SECTION ===== */

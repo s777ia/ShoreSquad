@@ -5,15 +5,26 @@
 
 // ===== APP CONFIGURATION =====
 const CONFIG = {
-  // Weather API (OpenWeatherMap - requires free API key)
-  WEATHER_API_KEY: 'your-openweather-api-key', // Replace with actual key
-  WEATHER_API_URL: 'https://api.openweathermap.org/data/2.5',
+  // Singapore NEA Weather API (no API key required for public data)
+  NEA_API_BASE: 'https://api.data.gov.sg/v1',
+  WEATHER_ENDPOINTS: {
+    realtime: '/environment/realtime-weather-readings',
+    forecast: '/environment/4-day-weather-forecast',
+    rainfall: '/environment/rainfall'
+  },
   
-  // Map configuration (will use browser geolocation)
+  // Singapore default location (Pasir Ris area)
   DEFAULT_LOCATION: {
-    lat: 37.7749,
-    lng: -122.4194,
-    name: 'San Francisco Bay Area'
+    lat: 1.381497,
+    lng: 103.955574,
+    name: 'Pasir Ris, Singapore'
+  },
+  
+  // Singapore weather stations near Pasir Ris
+  NEAREST_STATIONS: {
+    temperature: 'Changi',
+    rainfall: 'Pasir Ris',
+    wind: 'Changi'
   },
   
   // Animation durations
@@ -155,76 +166,222 @@ class GeolocationService {
   }
 }
 
-// ===== WEATHER SERVICE =====
+// ===== SINGAPORE NEA WEATHER SERVICE =====
 class WeatherService {
-  static async getCurrentWeather(lat, lng) {
+  static async getCurrentWeather() {
     try {
-      if (!CONFIG.WEATHER_API_KEY || CONFIG.WEATHER_API_KEY === 'your-openweather-api-key') {
-        // Mock weather data for demo
-        return this.getMockWeatherData();
-      }
-
-      const response = await fetch(
-        `${CONFIG.WEATHER_API_URL}/weather?lat=${lat}&lon=${lng}&appid=${CONFIG.WEATHER_API_KEY}&units=metric`
-      );
-
-      if (!response.ok) {
-        throw new Error('Weather API request failed');
-      }
-
-      const data = await response.json();
-      return this.formatWeatherData(data);
+      // Get real-time weather readings from NEA
+      const realtimeData = await this.fetchRealtimeWeather();
+      const forecastData = await this.fetch4DayForecast();
+      
+      return {
+        current: this.formatCurrentWeather(realtimeData),
+        forecast: this.formatForecastData(forecastData)
+      };
     } catch (error) {
-      console.warn('Weather service error:', error.message);
-      return this.getMockWeatherData();
+      console.warn('NEA Weather service error:', error.message);
+      return this.getFallbackWeatherData();
     }
   }
 
-  static getMockWeatherData() {
-    const conditions = ['sunny', 'cloudy', 'partly-cloudy'];
-    const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
-    
+  static async fetchRealtimeWeather() {
+    const response = await fetch(
+      `${CONFIG.NEA_API_BASE}${CONFIG.WEATHER_ENDPOINTS.realtime}`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`NEA API error: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  static async fetch4DayForecast() {
+    const response = await fetch(
+      `${CONFIG.NEA_API_BASE}${CONFIG.WEATHER_ENDPOINTS.forecast}`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`NEA Forecast API error: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  static formatCurrentWeather(data) {
+    try {
+      const items = data.items[0]; // Latest reading
+      const readings = items.readings;
+      
+      // Find nearest station readings
+      const tempReading = readings.air_temperature.find(
+        station => station.station_id === 'S24' || station.station_id === 'S109' // Changi area
+      ) || readings.air_temperature[0];
+      
+      const humidityReading = readings.relative_humidity.find(
+        station => station.station_id === 'S24' || station.station_id === 'S109'
+      ) || readings.relative_humidity[0];
+      
+      const windReading = readings.wind_speed ? readings.wind_speed.find(
+        station => station.station_id === 'S24' || station.station_id === 'S109'
+      ) || readings.wind_speed[0] : null;
+      
+      const rainfallReading = readings.rainfall.find(
+        station => station.station_id === 'S64' // Pasir Ris
+      ) || readings.rainfall[0];
+
+      const temperature = tempReading ? tempReading.value : 28;
+      const humidity = humidityReading ? humidityReading.value : 75;
+      const windSpeed = windReading ? Math.round(windSpeed.value * 3.6) : 10; // m/s to km/h
+      const rainfall = rainfallReading ? rainfallReading.value : 0;
+      
+      return {
+        temperature: Math.round(temperature),
+        humidity: Math.round(humidity),
+        windSpeed: Math.round(windSpeed),
+        rainfall: rainfall,
+        condition: this.determineCondition(temperature, humidity, rainfall),
+        description: this.getConditionDescription(temperature, rainfall),
+        icon: this.getWeatherIcon(rainfall, temperature),
+        timestamp: items.timestamp,
+        location: 'Pasir Ris Area'
+      };
+    } catch (error) {
+      console.warn('Error formatting current weather:', error);
+      return this.getFallbackCurrentWeather();
+    }
+  }
+
+  static formatForecastData(data) {
+    try {
+      const items = data.items[0];
+      const forecasts = items.forecasts;
+      
+      return forecasts.map(day => ({
+        date: day.date,
+        forecast: day.forecast,
+        temperature: {
+          high: day.temperature.high,
+          low: day.temperature.low
+        },
+        humidity: {
+          high: day.relative_humidity.high,
+          low: day.relative_humidity.low
+        },
+        wind: day.wind ? {
+          speed: day.wind.speed,
+          direction: day.wind.direction
+        } : null,
+        icon: this.getForecastIcon(day.forecast),
+        description: this.getForecastDescription(day.forecast)
+      }));
+    } catch (error) {
+      console.warn('Error formatting forecast data:', error);
+      return this.getFallbackForecastData();
+    }
+  }
+
+  static determineCondition(temp, humidity, rainfall) {
+    if (rainfall > 5) return 'rainy';
+    if (humidity > 80) return 'humid';
+    if (temp > 32) return 'hot';
+    if (temp < 26) return 'cool';
+    return 'pleasant';
+  }
+
+  static getConditionDescription(temp, rainfall) {
+    if (rainfall > 10) return 'Heavy rain - consider rescheduling cleanup';
+    if (rainfall > 2) return 'Light rain - bring umbrellas!';
+    if (temp > 33) return 'Very hot - stay hydrated and take breaks';
+    if (temp > 30) return 'Great weather for beach cleanup!';
+    return 'Perfect conditions for outdoor activities!';
+  }
+
+  static getWeatherIcon(rainfall, temp) {
+    if (rainfall > 5) return '🌧️';
+    if (rainfall > 0) return '🌦️';
+    if (temp > 32) return '☀️';
+    if (temp > 28) return '🌤️';
+    return '⛅';
+  }
+
+  static getForecastIcon(forecast) {
+    const forecastLower = forecast.toLowerCase();
+    if (forecastLower.includes('rain') || forecastLower.includes('shower')) return '🌧️';
+    if (forecastLower.includes('thunder')) return '⛈️';
+    if (forecastLower.includes('cloud')) return '☁️';
+    if (forecastLower.includes('partly')) return '⛅';
+    if (forecastLower.includes('fair') || forecastLower.includes('sunny')) return '☀️';
+    return '🌤️';
+  }
+
+  static getForecastDescription(forecast) {
+    const forecastLower = forecast.toLowerCase();
+    if (forecastLower.includes('rain') || forecastLower.includes('shower')) {
+      return 'Check weather before heading out';
+    }
+    if (forecastLower.includes('thunder')) {
+      return 'Not suitable for beach activities';
+    }
+    if (forecastLower.includes('fair') || forecastLower.includes('sunny')) {
+      return 'Perfect for beach cleanup!';
+    }
+    return 'Good conditions for outdoor activities';
+  }
+
+  static getFallbackWeatherData() {
     return {
-      temperature: Math.round(Math.random() * 15 + 20), // 20-35°C
-      condition: randomCondition,
-      humidity: Math.round(Math.random() * 30 + 40), // 40-70%
-      windSpeed: Math.round(Math.random() * 10 + 5), // 5-15 km/h
-      uvIndex: Math.round(Math.random() * 8 + 2), // 2-10
-      description: this.getConditionDescription(randomCondition),
-      icon: this.getWeatherIcon(randomCondition)
+      current: this.getFallbackCurrentWeather(),
+      forecast: this.getFallbackForecastData()
     };
   }
 
-  static formatWeatherData(data) {
+  static getFallbackCurrentWeather() {
     return {
-      temperature: Math.round(data.main.temp),
-      condition: data.weather[0].main.toLowerCase(),
-      humidity: data.main.humidity,
-      windSpeed: Math.round(data.wind.speed * 3.6), // m/s to km/h
-      description: data.weather[0].description,
-      icon: this.getWeatherIcon(data.weather[0].main.toLowerCase())
+      temperature: 29,
+      humidity: 78,
+      windSpeed: 12,
+      rainfall: 0,
+      condition: 'pleasant',
+      description: 'Typical Singapore weather - great for beach cleanup!',
+      icon: '🌤️',
+      timestamp: new Date().toISOString(),
+      location: 'Singapore'
     };
   }
 
-  static getConditionDescription(condition) {
-    const descriptions = {
-      'sunny': 'Perfect weather for beach cleanup!',
-      'cloudy': 'Great conditions for outdoor activities',
-      'partly-cloudy': 'Nice day with some cloud cover',
-      'rain': 'Consider rescheduling your cleanup'
-    };
-    return descriptions[condition] || 'Weather conditions are variable';
-  }
-
-  static getWeatherIcon(condition) {
-    const icons = {
-      'sunny': '☀️',
-      'cloudy': '☁️',
-      'partly-cloudy': '⛅',
-      'rain': '🌧️',
-      'clear': '☀️'
-    };
-    return icons[condition] || '🌤️';
+  static getFallbackForecastData() {
+    const days = ['Today', 'Tomorrow', 'Day 3', 'Day 4'];
+    return days.map((day, index) => ({
+      date: new Date(Date.now() + index * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      forecast: 'Partly Cloudy',
+      temperature: {
+        high: 32 + Math.round(Math.random() * 3),
+        low: 26 + Math.round(Math.random() * 2)
+      },
+      humidity: {
+        high: 85 + Math.round(Math.random() * 10),
+        low: 65 + Math.round(Math.random() * 10)
+      },
+      wind: {
+        speed: 10 + Math.round(Math.random() * 5),
+        direction: 'NE'
+      },
+      icon: index === 0 ? '🌤️' : '⛅',
+      description: 'Good conditions for outdoor activities'
+    }));
   }
 }
 
@@ -311,25 +468,70 @@ class DataManager {
 
 // ===== UI COMPONENTS =====
 class UIComponents {
-  // Create weather widget HTML
+  // Create comprehensive weather widget with current + 4-day forecast
   static createWeatherWidget(weatherData) {
-    return `
+    const { current, forecast } = weatherData;
+    
+    const currentWeatherHtml = `
       <div class="weather__current">
-        <div class="weather__icon">${weatherData.icon}</div>
-        <div class="weather__temp">${weatherData.temperature}°C</div>
-        <div class="weather__condition">${weatherData.description}</div>
-      </div>
-      <div class="weather__details">
-        <div class="weather__detail">
-          <span class="weather__label">Humidity</span>
-          <span class="weather__value">${weatherData.humidity}%</span>
+        <div class="weather__main">
+          <div class="weather__icon">${current.icon}</div>
+          <div class="weather__temp">${current.temperature}°C</div>
+          <div class="weather__location">${current.location}</div>
         </div>
-        <div class="weather__detail">
-          <span class="weather__label">Wind</span>
-          <span class="weather__value">${weatherData.windSpeed} km/h</span>
+        <div class="weather__condition">${current.description}</div>
+        <div class="weather__details">
+          <div class="weather__detail">
+            <span class="weather__label">💧 Humidity</span>
+            <span class="weather__value">${current.humidity}%</span>
+          </div>
+          <div class="weather__detail">
+            <span class="weather__label">💨 Wind Speed</span>
+            <span class="weather__value">${current.windSpeed} km/h</span>
+          </div>
+          <div class="weather__detail">
+            <span class="weather__label">🌧️ Rainfall</span>
+            <span class="weather__value">${current.rainfall}mm</span>
+          </div>
         </div>
       </div>
     `;
+    
+    const forecastHtml = `
+      <div class="weather__forecast">
+        <h3 class="weather__forecast-title">4-Day Forecast</h3>
+        <div class="weather__forecast-grid">
+          ${forecast.map((day, index) => `
+            <div class="forecast-day">
+              <div class="forecast-day__date">${this.formatForecastDate(day.date, index)}</div>
+              <div class="forecast-day__icon">${day.icon}</div>
+              <div class="forecast-day__temp">
+                <span class="temp-high">${day.temperature.high}°</span>
+                <span class="temp-low">${day.temperature.low}°</span>
+              </div>
+              <div class="forecast-day__condition">${day.forecast}</div>
+              <div class="forecast-day__description">${day.description}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    
+    return currentWeatherHtml + forecastHtml;
+  }
+  
+  static formatForecastDate(dateString, index) {
+    const date = new Date(dateString);
+    const today = new Date();
+    
+    if (index === 0) return 'Today';
+    if (index === 1) return 'Tomorrow';
+    
+    return date.toLocaleDateString('en-SG', { 
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
   }
 
   // Create event card HTML
@@ -575,15 +777,14 @@ class ShoreSquadApp {
     }
   }
 
-  // Load weather data
+  // Load weather data from Singapore NEA
   async loadWeatherData() {
     try {
-      const location = this.userLocation || CONFIG.DEFAULT_LOCATION;
-      this.weatherData = await WeatherService.getCurrentWeather(location.lat, location.lng);
-      console.log('🌤️ Weather data loaded:', this.weatherData);
+      this.weatherData = await WeatherService.getCurrentWeather();
+      console.log('🌤️ NEA Weather data loaded:', this.weatherData);
     } catch (error) {
-      console.warn('🌤️ Weather loading failed');
-      this.weatherData = WeatherService.getMockWeatherData();
+      console.warn('🌤️ NEA Weather loading failed, using fallback');
+      this.weatherData = WeatherService.getFallbackWeatherData();
     }
   }
 
@@ -602,7 +803,7 @@ class ShoreSquadApp {
     this.renderStats();
   }
 
-  // Render weather widget
+  // Render weather widget with 4-day forecast
   renderWeather() {
     const weatherWidget = document.querySelector('#weather-widget');
     const weatherLoading = document.querySelector('#weather-loading');
@@ -614,12 +815,10 @@ class ShoreSquadApp {
       
       weatherWidget.innerHTML = UIComponents.createWeatherWidget(this.weatherData);
       
-      // Add weather-specific styling
+      // Update widget styling for new layout
       weatherWidget.style.cssText = `
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: var(--space-xl);
-        align-items: center;
+        display: block;
+        width: 100%;
       `;
     }
   }
